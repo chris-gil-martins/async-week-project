@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { fireAuth, db, googleAuthProvider } from '../firebase';
 
-export const UserContext = React.createContext();
+const UserContext = React.createContext();
+
+export const useUser = () => {
+  return useContext(UserContext);
+};
 
 const UserProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState();
@@ -12,6 +16,9 @@ const UserProvider = ({ children }) => {
       db.collection('users').doc(credentials.user.uid).set({
         name,
         following: [],
+        followers: [],
+        profilePicture:
+          'https://cdn.business2community.com/wp-content/uploads/2017/08/blank-profile-picture-973460_640.png',
       });
     });
   };
@@ -23,12 +30,18 @@ const UserProvider = ({ children }) => {
   const loginWithGoogle = () => {
     return fireAuth
       .signInWithPopup(googleAuthProvider)
-      .then((result) => {
+      .then(async (result) => {
         const user = result.user;
-        db.collection('users').doc(user.uid).set({
-          name: user.displayName,
-          following: [],
-        });
+        const doc = await db.collection('users').doc(user.uid).get();
+        if (!doc || !doc.exists) {
+          await db.collection('users').doc(user.uid).set({
+            name: user.displayName,
+            following: [],
+            followers: [],
+            profilePicture:
+              'https://cdn.business2community.com/wp-content/uploads/2017/08/blank-profile-picture-973460_640.png',
+          });
+        }
       })
       .catch((error) => {
         console.error(error);

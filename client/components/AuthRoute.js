@@ -1,14 +1,24 @@
-import React, { useContext } from 'react';
+import React from 'react';
 import { Route, Redirect } from 'react-router-dom';
-import { UserContext } from '../contexts/UserContext';
+import { useUser } from '../contexts/UserContext';
+import { useSelector } from 'react-redux';
 
 const AuthRoute = ({ component: Component, extraProps = {}, ...otherProps }) => {
-  const { currentUser } = useContext(UserContext);
+  const { currentUser } = useUser();
+  const user = useSelector((state) => state.auth);
   return (
     <Route
       {...otherProps}
       render={(props) => {
-        return currentUser ? <Component {...props} {...extraProps} /> : <Redirect to="/login" />;
+        return currentUser ? (
+          user.id ? (
+            <Component {...props} {...extraProps} />
+          ) : (
+            <div>Loading...</div>
+          )
+        ) : (
+          <Redirect to="/login" />
+        );
       }}
     />
   );

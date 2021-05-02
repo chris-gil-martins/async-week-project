@@ -1,65 +1,83 @@
 import React, { useEffect, useContext } from 'react';
-import { UserContext } from '../contexts/UserContext';
+import { useUser } from '../contexts/UserContext';
 import { db } from '../firebase';
 import { setUsers } from '../redux/reducers/users';
 import { useSelector, useDispatch } from 'react-redux';
 import { Link as RouterLink } from 'react-router-dom';
 import firebase from 'firebase/app';
+import _ from 'lodash';
 
-import { Grid, Link, Button, Box, Typography } from '@material-ui/core';
+import { Grid, Link, Button, Box, Typography, Avatar, makeStyles } from '@material-ui/core';
 
-const UserList = ({ following }) => {
-  const { currentUser } = useContext(UserContext);
+const useStyles = makeStyles((theme) => ({
+  large: {
+    width: theme.spacing(7),
+    height: theme.spacing(7),
+  },
+}));
+
+const UserList = ({ subset }) => {
+  const { currentUser } = useUser();
+  const user = useSelector((state) => state.auth);
+
+  const classes = useStyles();
+
   let users = useSelector((state) => state.users);
-  users = following ? users.filter((user) => user.following) : users;
-  const dispatch = useDispatch();
 
-  useEffect(() => {
-    return db.collection('users').onSnapshot(async (snapshot) => {
-      const userInfo = await db.collection('users').doc(currentUser.uid).get();
-      const userFollowing = userInfo.data().following;
-      dispatch(
-        setUsers(
-          snapshot.docs
-            .filter((doc) => doc.id !== currentUser.uid)
-            .map((doc) => ({
-              id: doc.id,
-              name: doc.data().name,
-              following: userFollowing.includes(doc.id),
-            }))
-        )
-      );
+  if (subset === 'following') {
+    users = _.pickBy(users, (otherUsers) => {
+      return user.following.includes(otherUsers.id);
     });
-  }, [currentUser]);
+  } else if (subset === 'followers') {
+    users = _.pickBy(users, (otherUsers) => {
+      return user.followers.includes(otherUsers.id);
+    });
+  }
 
-  const handleClick = (following, id) => {
-    let update = following
+  const handleClick = async (following, id) => {
+    let myUpdate = following
       ? firebase.firestore.FieldValue.arrayRemove(id)
       : firebase.firestore.FieldValue.arrayUnion(id);
-    db.collection('users').doc(currentUser.uid).update({ following: update });
+    let theirUpdate = following
+      ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+      : firebase.firestore.FieldValue.arrayUnion(currentUser.uid);
+    await db.collection('users').doc(currentUser.uid).update({ following: myUpdate });
+    await db.collection('users').doc(id).update({ followers: theirUpdate });
   };
 
   return (
     <Box pt={3}>
-      <Grid container spacing={2} justify="center">
-        {users.map((user) => {
+      <Grid container spacing={2} justify="space-around">
+        {_.values(users).map((otherUser) => {
           return (
             <Grid
               item
-              key={user.id}
-              xs={4}
-              md={2}
+              key={otherUser.id}
+              xs={6}
+              md={4}
+              lg={2}
               container
               direction="column"
               alignItems="center"
-              style={{ border: '1px solid black' }}
+              justify="space-between"
             >
-              <Link to={`/users/${user.id}`} component={RouterLink}>
-                <Typography variant="h5">{user.name}</Typography>
+              <Avatar src={otherUser.profilePicture} className={classes.large} />
+              <Link to={`/users/${otherUser.id}`} component={RouterLink}>
+                <Typography variant="h5" align="center">
+                  {otherUser.name}
+                </Typography>
               </Link>
               <Box pt={2}>
-                <Button onClick={() => handleClick(user.following, user.id)} variant="contained">
-                  {user.following ? 'unfollow' : 'follow'}
+                <Button
+                  onClick={() => handleClick(user.following.includes(otherUser.id), otherUser.id)}
+                  variant="contained"
+                  style={{
+                    backgroundColor: user.following.includes(otherUser.id)
+                      ? 'tomato'
+                      : 'dodgerblue',
+                  }}
+                >
+                  {user.following.includes(otherUser.id) ? 'unfollow' : 'follow'}
                 </Button>
               </Box>
             </Grid>

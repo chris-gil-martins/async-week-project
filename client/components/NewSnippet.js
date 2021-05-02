@@ -1,5 +1,5 @@
 import React, { useState, useContext } from 'react';
-import { UserContext } from '../contexts/UserContext';
+import { useUser } from '../contexts/UserContext';
 import { db } from '../firebase';
 
 import 'ace-builds/src-noconflict/ace';
@@ -24,7 +24,7 @@ const NewSnippet = ({ closeModal }) => {
   const [description, setDescription] = useState('');
   const [code, setCode] = useState('');
 
-  const { currentUser } = useContext(UserContext);
+  const { currentUser } = useUser();
 
   const handleSubmit = () => {
     db.collection('snippets').add({
@@ -34,6 +34,9 @@ const NewSnippet = ({ closeModal }) => {
       code,
       mode,
       theme,
+      createdAt: Date.now(),
+      likedBy: [],
+      comments: [],
     });
     closeModal();
   };

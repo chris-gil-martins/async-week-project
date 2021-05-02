@@ -7,7 +7,7 @@ export const setUsers = (users) => ({
   users,
 });
 
-const userReducer = (state = [], action) => {
+const userReducer = (state = {}, action) => {
   switch (action.type) {
     case ACTIONS.SET_USERS:
       return action.users;

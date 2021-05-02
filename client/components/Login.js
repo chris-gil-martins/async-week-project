@@ -1,5 +1,5 @@
-import React, { useState, useContext } from 'react';
-import { UserContext } from '../contexts/UserContext';
+import React, { useState } from 'react';
+import { useUser } from '../contexts/UserContext';
 import { useHistory } from 'react-router-dom';
 
 import { Grid, TextField, Box, Button } from '@material-ui/core';
@@ -8,7 +8,7 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const { login, loginWithGoogle } = useContext(UserContext);
+  const { login, loginWithGoogle } = useUser();
   const history = useHistory();
 
   const handleSubmit = async (evt) => {

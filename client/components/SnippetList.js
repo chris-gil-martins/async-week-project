@@ -1,10 +1,10 @@
-import React, { useEffect, useContext, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { UserContext } from '../contexts/UserContext';
+import React, { useState } from 'react';
+import { useParams, Link as RouterLink } from 'react-router-dom';
+import { useUser } from '../contexts/UserContext';
 import { db } from '../firebase';
-import { setSnippets } from '../redux/reducers/snippets';
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
 import NewSnippet from './NewSnippet';
+import firebase from 'firebase/app';
 
 import 'ace-builds/src-noconflict/ace';
 import 'ace-builds/src-min-noconflict/ext-searchbox';
@@ -28,7 +28,16 @@ import {
   Grid,
   Box,
   Typography,
+  Link,
+  IconButton,
+  Card,
+  CardContent,
+  CardHeader,
+  CardActions,
+  Avatar,
 } from '@material-ui/core';
+import DeleteIcon from '@material-ui/icons/Delete';
+import LiveTvIcon from '@material-ui/icons/LiveTv';
 
 const useStyles = makeStyles((theme) => ({
   modal: {
@@ -42,17 +51,25 @@ const useStyles = makeStyles((theme) => ({
     boxShadow: theme.shadows[5],
     padding: theme.spacing(2, 4, 3),
   },
+  editor: {
+    maxWidth: '95%',
+    maxHeight: 350,
+    margin: '0 auto',
+  },
+  large: {
+    width: theme.spacing(10),
+    height: theme.spacing(10),
+  },
 }));
 
 const SnippetList = ({ self }) => {
   const classes = useStyles();
-  const { currentUser } = useContext(UserContext);
+  const { currentUser } = useUser();
   const snippets = useSelector((state) => state.snippets);
-  const dispatch = useDispatch();
   const { userId } = useParams();
-
-  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const user = useSelector((state) => state.auth);
+  const author = self ? user : useSelector((state) => state.users)[userId];
 
   const handleOpen = () => {
     setOpen(true);
@@ -62,28 +79,30 @@ const SnippetList = ({ self }) => {
     setOpen(false);
   };
 
-  useEffect(() => {
-    setLoading(true);
-  }, [currentUser, userId]);
-
-  useEffect(() => {
-    return db
-      .collection('snippets')
-      .where('userId', '==', self ? currentUser.uid : userId)
-      .onSnapshot((snapshot) => {
-        dispatch(setSnippets(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))));
-        setLoading(false);
-      });
-  }, [currentUser, userId]);
-
   const handleDelete = (snippetId) => {
     db.collection('snippets').doc(snippetId).delete();
   };
 
+  const handleClick = async (following, id) => {
+    let myUpdate = following
+      ? firebase.firestore.FieldValue.arrayRemove(id)
+      : firebase.firestore.FieldValue.arrayUnion(id);
+    let theirUpdate = following
+      ? firebase.firestore.FieldValue.arrayRemove(currentUser.uid)
+      : firebase.firestore.FieldValue.arrayUnion(currentUser.uid);
+    await db.collection('users').doc(currentUser.uid).update({ following: myUpdate });
+    await db.collection('users').doc(id).update({ followers: theirUpdate });
+  };
+
+  const filteredSnippets = snippets.filter((snippet) => {
+    return self ? snippet.userId == currentUser.uid : snippet.userId == userId;
+  });
+
   return (
-    <React.Fragment>
-      {self && (
-        <div>
+    <Box mt={3}>
+      {self ? (
+        <Box mb={2}>
+          <Typography variant="h4">My Snippets</Typography>
           <Box py={2}>
             <Button type="button" onClick={handleOpen} variant="contained" color="primary">
               New Snippet
@@ -107,54 +126,89 @@ const SnippetList = ({ self }) => {
               </div>
             </Fade>
           </Modal>
-        </div>
+        </Box>
+      ) : (
+        <Box mb={2}>
+          <Avatar src={author.profilePicture} className={classes.large} />
+          <Typography variant="h4">{`${author.name}'s`} Snippets</Typography>
+          <Box mt={1}>
+            <Button
+              to={`/livestream/${author.id}`}
+              component={RouterLink}
+              variant="contained"
+              color="primary"
+              style={{ marginRight: '1rem' }}
+              startIcon={<LiveTvIcon />}
+            >
+              Livestream
+            </Button>
+            <Button
+              onClick={() => handleClick(user.following.includes(author.id), author.id)}
+              variant="contained"
+              style={{
+                backgroundColor: user.following.includes(author.id) ? 'tomato' : 'dodgerblue',
+              }}
+            >
+              {user.following.includes(author.id) ? 'unfollow' : 'follow'}
+            </Button>
+          </Box>
+        </Box>
       )}
-      {!loading && (
+      {filteredSnippets.length > 0 && (
         <Grid container spacing={2} justify="center">
-          {snippets.map((snippet) => {
+          {filteredSnippets.map((snippet) => {
             return (
-              <Grid
-                key={snippet.id}
-                item
-                xs={12}
-                sm={6}
-                md={4}
-                container
-                direction="column"
-                alignItems="center"
-              >
-                <Typography>{snippet.name}</Typography>
-                <AceEditor
-                  mode={snippet.mode}
-                  theme={snippet.theme}
-                  name={snippet.id}
-                  value={snippet.code}
-                  fontSize={14}
-                  style={{ flexGrow: 1, maxWidth: '100%', maxHeight: 350 }}
-                  setOptions={{
-                    useWorker: false,
-                    showLineNumbers: true,
-                    readOnly: true,
-                  }}
-                />
-                {self && (
-                  <Box pt={2}>
-                    <Button
-                      type="button"
-                      variant="contained"
-                      color="secondary"
-                      onClick={() => handleDelete(snippet.id)}
-                    >
-                      Delete Snippet
-                    </Button>
-                  </Box>
-                )}
+              <Grid key={snippet.id} item xs={12} sm={6} md={4}>
+                <Card className={classes.root}>
+                  <CardHeader
+                    title={
+                      <Link to={`/snippets/${snippet.id}`} component={RouterLink}>
+                        <Typography align="center" variant="h5">
+                          {snippet.name}
+                        </Typography>
+                      </Link>
+                    }
+                    subheader={new Date(snippet.createdAt).toLocaleString(undefined, {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })}
+                  />
+                  <CardContent>
+                    <AceEditor
+                      mode={snippet.mode}
+                      theme={snippet.theme}
+                      name={snippet.id}
+                      value={snippet.code}
+                      fontSize={14}
+                      className={classes.editor}
+                      setOptions={{
+                        useWorker: false,
+                        showLineNumbers: true,
+                        readOnly: true,
+                      }}
+                    />
+                  </CardContent>
+                  {self && (
+                    <CardActions disableSpacing>
+                      <IconButton
+                        type="button"
+                        variant="contained"
+                        color="secondary"
+                        onClick={() => handleDelete(snippet.id)}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </CardActions>
+                  )}
+                </Card>
               </Grid>
             );
           })}
         </Grid>
       )}
-    </React.Fragment>
+    </Box>
   );
 };
 
